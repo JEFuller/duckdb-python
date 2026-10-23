@@ -33,11 +33,11 @@ public:
 	PathlibCacheItem pathlib;
 	PolarsCacheItem polars;
 	DuckdbCacheItem duckdb;
-	PytzCacheItem pytz;
 	TypesCacheItem types;
 	TypingCacheItem typing;
 	UuidCacheItem uuid;
 	CollectionsCacheItem collections;
+	ZoneinfoCacheItem zoneinfo;
 
 public:
 	py::handle AddCache(py::object item);

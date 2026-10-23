@@ -91,6 +91,11 @@ jobs:
         include:
           - platform: windows-x64
             os: windows-2022
+            msvc_arch: x64
+            python: .consumer/Scripts/python.exe
+          - platform: windows-arm64
+            os: windows-11-arm
+            msvc_arch: arm64
             python: .consumer/Scripts/python.exe
           - platform: linux-x86_64
             os: ubuntu-24.04
@@ -117,7 +122,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
         with:
-          arch: x64
+          arch: ${{ matrix.msvc_arch }}
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12.13"

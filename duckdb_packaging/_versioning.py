@@ -174,7 +174,7 @@ def create_git_tag(version: str, message: str | None = None, repo_path: pathlib.
 def duckdb_tag_from_pep440(version: str) -> str:
     """Map a forced package version to a DuckDB version tag.
 
-    Post releases repackage the stable engine, so the post suffix is dropped.
+    Post releases and local builds repackage the engine, so those suffixes are dropped.
     Pre-release suffixes pass through: DuckDB's build validates what it
     supports and fails on versions it does not (yet) accept.
 
@@ -184,7 +184,7 @@ def duckdb_tag_from_pep440(version: str) -> str:
     Returns:
         DuckDB git tag (e.g. "v1.3.1", "v1.3.1-rc2" or "v1.3.1-a1")
     """
-    major, minor, patch, _post, pre = parse_version(version)
+    major, minor, patch, _post, pre = parse_version(version.partition("+")[0])
     return pep440_to_git_tag(format_version(major, minor, patch, pre=pre))
 
 

@@ -42,6 +42,53 @@ Install with all optional dependencies:
 pip install 'duckdb[all]'
 ```
 
+### This fork's zoneinfo build (without publishing to PyPI)
+
+This branch combines the Python client and engine at `v1.5.6` with the `zoneinfo`
+backport. Named time zones use the system IANA timezone database. Native fetched
+datetimes now have `zoneinfo.ZoneInfo` objects; use `tzinfo.key` instead of
+`tzinfo.zone`.
+
+Build a wheel with the PEP 440 local version `1.5.6+zoneinfo`:
+
+```bash
+git submodule update --init --recursive
+uv sync --only-group build --no-install-project -p 3.13
+OVERRIDE_GIT_DESCRIBE=v1.5.6+zoneinfo uv build --wheel
+```
+
+Install that wheel in another project, without consulting a package index:
+
+```bash
+uv pip install --no-index --find-links /absolute/path/to/duckdb-python/dist \
+  'duckdb==1.5.6+zoneinfo'
+```
+
+For a uv-managed project, use `uv add --python 3.13 /absolute/path/to/the-built-wheel.whl`
+to record the wheel as a direct dependency. Wheels can also be distributed as
+GitHub Release assets or through a private wheel directory. No PyPI upload is
+needed. A wheel must match the consumer's Python version, OS, architecture, and
+Linux runtime requirements; an Ubuntu-built wheel is not a manylinux wheel.
+Use a manylinux/cibuildwheel build for broader Linux distribution.
+
+Download the wheel matching your platform from
+[the fork's release assets](https://github.com/JEFuller/duckdb/releases/tag/v1.5.6-zoneinfo),
+then install it with `uv add --python 3.13 /path/to/downloaded-wheel.whl`.
+To pin the version explicitly while retaining that wheel source:
+
+```bash
+uv add --python 3.13 --no-index 'duckdb==1.5.6+zoneinfo'
+```
+
+The release contains CPython 3.13 wheels for macOS ARM64 (macOS 26+), Ubuntu
+ARM64/x86_64, and Windows x64. Ubuntu wheels require a compatible glibc runtime.
+On Windows, install `tzdata` separately to provide the IANA timezone database;
+it is not bundled in Python or this wheel.
+
+The fork-only `Packaging` workflow on branch `v1.5.6-zoneinfo` builds and tests
+the Windows x64 wheel and retains it as an Actions artifact. It never invokes
+the PyPI publishing workflow. Release asset uploads are a separate operation.
+
 ## Contributing
 
 See the [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on how to set up a development environment.

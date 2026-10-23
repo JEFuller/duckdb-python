@@ -62,6 +62,7 @@ defaults:
 
 jobs:
   build_sdist:
+    if: ${{ github.ref_name != 'v1.5.6-zoneinfo' }}
     name: Build an sdist and determine versions
     uses: ./.github/workflows/packaging_sdist.yml
     with:
@@ -71,6 +72,7 @@ jobs:
       set-version: ${{ inputs.set-version }}
 
   build_wheels:
+    if: ${{ github.ref_name != 'v1.5.6-zoneinfo' }}
     name: Build and test releases
     uses: ./.github/workflows/packaging_wheels.yml
     with:
@@ -79,3 +81,46 @@ jobs:
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}
+
+  zoneinfo_windows:
+    name: Zoneinfo CPython 3.13 Windows x64
+    if: ${{ github.repository == 'JEFuller/duckdb-python' && github.ref_name == 'v1.5.6-zoneinfo' }}
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    env:
+      OVERRIDE_GIT_DESCRIBE: v1.5.6+zoneinfo
+      CMAKE_BUILD_PARALLEL_LEVEL: "2"
+      CMAKE_GENERATOR: Ninja
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          enable-cache: false
+      - name: Build wheel without publishing
+        run: uv build --wheel --python 3.13 --out-dir wheelhouse
+      - name: Install wheel in a separate environment
+        run: |
+          uv venv --python 3.13 .consumer
+          uv pip install --python .consumer/Scripts/python.exe --no-index --find-links wheelhouse 'duckdb==1.5.6+zoneinfo'
+          .consumer/Scripts/python.exe -c 'from importlib.metadata import version; import duckdb; assert version("duckdb") == "1.5.6+zoneinfo"; assert duckdb.sql("SELECT version()").fetchone() == ("v1.5.6",)'
+      - name: Test installed wheel
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          uv pip install --python .consumer/Scripts/python.exe pytest pytest-timeout pytest-reraise pytest-timestamper packaging numpy pandas==3.0.3 pyarrow==24.0.0 tzdata
+          .consumer/Scripts/python.exe -m pytest tests/fast/api/test_native_tz.py tests/fast/arrow/test_timestamp_timezone.py tests/fast/arrow/test_arrow_offsets.py tests/fast/test_all_types.py tests/fast/pandas/test_append_df.py tests/fast/test_optional_dependencies.py tests/fast/test_versioning.py -q
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-cp313-win_amd64-zoneinfo
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          compression-level: 0

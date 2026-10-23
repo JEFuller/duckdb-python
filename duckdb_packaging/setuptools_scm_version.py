@@ -116,6 +116,7 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
         (?:-post\d+|-(?:alpha|beta|preview|pre|rc|a|b|c)\d+)?)     # -postN or a PEP440 pre-release
         (?:-(?P<distance>\d+))?                                    # optional -N
         (?:-g(?P<hash>[0-9a-fA-F]+))?                              # optional -g<sha>
+        (?:\+(?P<local>[a-zA-Z0-9]+(?:[._-][a-zA-Z0-9]+)*))?      # optional local build label
         $""",
         re.VERBOSE,
     )
@@ -125,7 +126,7 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
         msg = f"Invalid git describe override: {override_value}"
         raise ValueError(msg)
 
-    version, distance, commit_hash = match.groups()
+    version, distance, commit_hash, local = match.groups()
 
     # Convert version format to PEP440 format (v1.3.1-post1 -> 1.3.1.post1, v1.3.1-a1 -> 1.3.1a1)
     version = git_tag_to_pep440(version)
@@ -133,8 +134,13 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
     # Bump version and format according to PEP440
     distance = int(distance or 0)
     pep440_version = _tag_to_version(str(version)) if distance == 0 else _bump_dev_version(str(version), distance)
+    local_parts = []
     if commit_hash:
-        pep440_version += f"+g{commit_hash.lower()}"
+        local_parts.append(f"g{commit_hash.lower()}")
+    if local:
+        local_parts.append(re.sub(r"[-_]", ".", local.lower()))
+    if local_parts:
+        pep440_version += "+" + ".".join(local_parts)
 
     return pep440_version
 

@@ -177,6 +177,11 @@ class TestDuckDBTagFromPep440(unittest.TestCase):
         """Post releases repackage the stable engine."""
         assert duckdb_tag_from_pep440("1.2.3.post1") == "v1.2.3"
 
+    def test_local_version_uses_unmodified_engine_version(self):
+        assert duckdb_tag_from_pep440("1.5.6+zoneinfo") == "v1.5.6"
+        assert duckdb_tag_from_pep440("1.5.6.post1+zoneinfo.1") == "v1.5.6"
+        assert duckdb_tag_from_pep440("1.5.6rc1+zoneinfo") == "v1.5.6-rc1"
+
     def test_pre_release_passes_through(self):
         """Pre-releases pass through normalized, DuckDB's build validates them."""
         assert duckdb_tag_from_pep440("1.2.3rc2") == "v1.2.3-rc2"
@@ -298,6 +303,19 @@ class TestGitOperations(unittest.TestCase):
 
 class TestEnvironmentVariableHandling(unittest.TestCase):
     """Test environment variable handling in setuptools_scm integration."""
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.5.6+zoneinfo"})
+    def test_override_git_describe_local_build(self):
+        assert forced_version_from_env() == "1.5.6+zoneinfo"
+        assert os.environ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"] == "1.5.6+zoneinfo"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.5.6+ZoneInfo_build-1"})
+    def test_override_git_describe_normalizes_local_build(self):
+        assert forced_version_from_env() == "1.5.6+zoneinfo.build.1"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.5.6-gABC123+zoneinfo"})
+    def test_override_git_describe_hash_and_local_build(self):
+        assert forced_version_from_env() == "1.5.6+gabc123.zoneinfo"
 
     @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-5-g1234567", "MAIN_BRANCH_VERSIONING": "0"})
     def test_override_git_describe_basic(self):

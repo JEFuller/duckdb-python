@@ -242,6 +242,7 @@ def build_wheel(
 
     # We add the found version to the OVERRIDE_GIT_DESCRIBE cmake var
     if duckdb_version is not None:
+        config_settings = config_settings or {}
         _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, duckdb_version, config_settings)
         _log(f"{_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE} set to {duckdb_version}")
     else:

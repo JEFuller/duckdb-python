@@ -86,7 +86,8 @@ On Windows, install `tzdata` separately to provide the IANA timezone database;
 it is not bundled in Python or this wheel.
 
 The fork-only `Packaging` workflow on branch `v1.5.6-zoneinfo` builds and tests
-the Windows x64 wheel and retains it as an Actions artifact. It never invokes
+CPython 3.12 wheels using Python 3.12.13 on all four platforms, retaining them
+as Actions artifacts. It never invokes
 the PyPI publishing workflow. Release asset uploads are a separate operation.
 
 ## Contributing

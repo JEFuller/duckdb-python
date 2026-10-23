@@ -82,10 +82,26 @@ jobs:
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}
 
-  zoneinfo_windows:
-    name: Zoneinfo CPython 3.13 Windows x64
+  zoneinfo_wheels:
+    name: Zoneinfo CPython 3.12.13 ${{ matrix.platform }}
     if: ${{ github.repository == 'JEFuller/duckdb-python' && github.ref_name == 'v1.5.6-zoneinfo' }}
-    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            os: windows-2022
+            python: .consumer/Scripts/python.exe
+          - platform: linux-x86_64
+            os: ubuntu-24.04
+            python: .consumer/bin/python
+          - platform: linux-aarch64
+            os: ubuntu-24.04-arm
+            python: .consumer/bin/python
+          - platform: macos-arm64
+            os: macos-15
+            python: .consumer/bin/python
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     env:
@@ -99,28 +115,31 @@ jobs:
           fetch-depth: 0
           submodules: recursive
       - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
         with:
           arch: x64
       - uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.13"
+          python-version: "3.12.13"
           enable-cache: false
       - name: Build wheel without publishing
-        run: uv build --wheel --python 3.13 --out-dir wheelhouse
+        run: |
+          uv run --no-project --python 3.12.13 python -c 'import sys; assert sys.version_info[:3] == (3, 12, 13), sys.version'
+          uv build --wheel --python 3.12.13 --out-dir wheelhouse
       - name: Install wheel in a separate environment
         run: |
-          uv venv --python 3.13 .consumer
-          uv pip install --python .consumer/Scripts/python.exe --no-index --find-links wheelhouse 'duckdb==1.5.6+zoneinfo'
-          .consumer/Scripts/python.exe -c 'from importlib.metadata import version; import duckdb; assert version("duckdb") == "1.5.6+zoneinfo"; assert duckdb.sql("SELECT version()").fetchone() == ("v1.5.6",)'
+          uv venv --python 3.12.13 .consumer
+          uv pip install --python ${{ matrix.python }} --no-index --find-links wheelhouse 'duckdb==1.5.6+zoneinfo'
+          ${{ matrix.python }} -c 'import sys; from importlib.metadata import version; import duckdb; assert sys.version_info[:3] == (3, 12, 13), sys.version; assert version("duckdb") == "1.5.6+zoneinfo"; assert duckdb.sql("SELECT version()").fetchone() == ("v1.5.6",)'
       - name: Test installed wheel
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          uv pip install --python .consumer/Scripts/python.exe pytest pytest-timeout pytest-reraise pytest-timestamper packaging numpy pandas==3.0.3 pyarrow==24.0.0 tzdata
-          .consumer/Scripts/python.exe -m pytest tests/fast/api/test_native_tz.py tests/fast/arrow/test_timestamp_timezone.py tests/fast/arrow/test_arrow_offsets.py tests/fast/test_all_types.py tests/fast/pandas/test_append_df.py tests/fast/test_optional_dependencies.py tests/fast/test_versioning.py -q
+          uv pip install --python ${{ matrix.python }} pytest pytest-timeout pytest-reraise pytest-timestamper packaging numpy pandas==3.0.3 pyarrow==24.0.0 tzdata
+          ${{ matrix.python }} -m pytest tests/fast/api/test_native_tz.py tests/fast/arrow/test_timestamp_timezone.py tests/fast/arrow/test_arrow_offsets.py tests/fast/test_all_types.py tests/fast/pandas/test_append_df.py tests/fast/test_optional_dependencies.py tests/fast/test_versioning.py -q
       - uses: actions/upload-artifact@v4
         with:
-          name: wheel-cp313-win_amd64-zoneinfo
+          name: wheel-cp312-${{ matrix.platform }}-zoneinfo
           path: wheelhouse/*.whl
           if-no-files-found: error
           compression-level: 0

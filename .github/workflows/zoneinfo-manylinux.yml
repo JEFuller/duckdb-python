@@ -1,0 +1,100 @@
+name: Zoneinfo manylinux wheels
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: CPython 3.12 manylinux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            os: ubuntu-24.04
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    env:
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Build, repair, and test wheel
+        uses: pypa/cibuildwheel@v3.2
+        env:
+          CIBW_BUILD: cp312-manylinux_${{ matrix.arch }}
+          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
+          CIBW_ENVIRONMENT: >-
+            OVERRIDE_GIT_DESCRIBE=v1.5.6+zoneinfo
+            CMAKE_BUILD_PARALLEL_LEVEL=2
+          CIBW_TEST_REQUIRES: >-
+            pytest pytest-timeout pytest-reraise pytest-timestamper
+            packaging numpy pandas==3.0.3 pyarrow==24.0.0 tzdata
+          CIBW_TEST_SOURCES: tests
+          CIBW_TEST_COMMAND: >-
+            python -m pytest -c {project}/pyproject.toml
+            tests/fast/api/test_native_tz.py
+            tests/fast/arrow/test_timestamp_timezone.py
+            tests/fast/arrow/test_arrow_offsets.py
+            tests/fast/test_all_types.py
+            tests/fast/pandas/test_append_df.py
+            tests/fast/test_optional_dependencies.py
+            tests/fast/test_versioning.py -q
+      - name: Verify supported Linux runtimes without pytz
+        run: |
+          for image in ubuntu:20.04 ubuntu:22.04 debian:bookworm-slim; do
+            docker run --rm \
+              -v "$PWD/wheelhouse:/wheels:ro" \
+              -e DEBIAN_FRONTEND=noninteractive \
+              "$image" bash -euxo pipefail -c '
+                apt-get update
+                apt-get install -y ca-certificates curl
+                curl -LsSf https://astral.sh/uv/install.sh | sh
+                export PATH="$HOME/.local/bin:$PATH"
+                uv venv --python 3.12.13 /consumer
+                uv pip install --python /consumer/bin/python \
+                  --no-index --find-links /wheels "duckdb==1.5.6+zoneinfo"
+                uv pip install --python /consumer/bin/python tzdata
+                cd /tmp
+                /consumer/bin/python -c "
+          import importlib.util
+          from datetime import datetime
+          from importlib.metadata import version
+          from zoneinfo import ZoneInfo
+          import duckdb
+
+          assert importlib.util.find_spec(\"pytz\") is None
+          assert version(\"duckdb\") == \"1.5.6+zoneinfo\"
+          assert duckdb.sql(\"SELECT version()\").fetchone() == (\"v1.5.6\",)
+          with duckdb.connect() as con:
+              for zone in (\"UTC\", \"US/Arizona\", \"America/New_York\"):
+                  con.execute(\"SET TimeZone = ?\", [zone])
+                  value = con.sql(\"SELECT now()\").fetchone()[0]
+                  assert isinstance(value.tzinfo, ZoneInfo), value
+                  assert value.tzinfo.key == zone, value
+              for fold in (0, 1):
+                  value = datetime(2026, 11, 1, 1, 30, fold=fold,
+                                   tzinfo=ZoneInfo(\"America/New_York\"))
+                  result = con.execute(\"SELECT ?::TIMESTAMPTZ\", [value]).fetchone()[0]
+                  assert result.timestamp() == value.timestamp(), result
+                  assert result.fold == fold, result
+              con.sql(\"SELECT now() AS t\").write_parquet(\"/tmp/tz.parquet\")
+              assert isinstance(con.read_parquet(\"/tmp/tz.parquet\").fetchone()[0].tzinfo, ZoneInfo)
+              con.execute(\"SELECT ?::JSON\", [\"{\\\"ok\\\": true}\"]).fetchone()
+          print(\"ZoneInfo, DST folds, Parquet, JSON, and no-pytz checks passed\")
+          "
+              '
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-cp312-manylinux-${{ matrix.arch }}-zoneinfo
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          compression-level: 0

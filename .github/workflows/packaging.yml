@@ -3,6 +3,10 @@ run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (ver
 on:
   workflow_dispatch:
     inputs:
+      manylinux-only:
+        type: boolean
+        description: Build only the compatible CPython 3.12 zoneinfo Linux wheels
+        default: false
       minimal:
         type: boolean
         description: Build a minimal set of wheels to do a sanity check
@@ -84,7 +88,7 @@ jobs:
 
   zoneinfo_wheels:
     name: Zoneinfo CPython 3.12.13 ${{ matrix.platform }}
-    if: ${{ github.repository == 'JEFuller/duckdb-python' && github.ref_name == 'v1.5.6-zoneinfo' }}
+    if: ${{ github.repository == 'JEFuller/duckdb-python' && github.ref_name == 'v1.5.6-zoneinfo' && !inputs.manylinux-only }}
     strategy:
       fail-fast: false
       matrix:
@@ -148,3 +152,7 @@ jobs:
           path: wheelhouse/*.whl
           if-no-files-found: error
           compression-level: 0
+
+  zoneinfo_manylinux:
+    if: ${{ github.repository == 'JEFuller/duckdb-python' && github.ref_name == 'v1.5.6-zoneinfo' && inputs.manylinux-only }}
+    uses: ./.github/workflows/zoneinfo-manylinux.yml
